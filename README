@@ -1,5 +1,8 @@
-tipsip -- SIP-stack written in Twisted Python
+tipsip -- Python SIP stack for Twisted or asyncio
 
-DEPENDENCIES:
+TWISTED DEPENDENCIES:
 - twisted (http://twistedmatrix.com)
 - txRedis [for redis storage backend] (https://github.com/deldotdr/txRedis)
+
+ASYNCIO DEPENDENCIES:
+- Python 3.5+
