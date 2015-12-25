@@ -2,8 +2,6 @@
 
 from copy import deepcopy
 
-from twisted.internet import defer
-
 from uri import URI
 from header import Headers, AddressHeader
 from header import generate_tag, request_mandatory_headers
@@ -88,7 +86,7 @@ class Request(Message):
         self._has_totag = None
         self._response_totag = None
 
-    def createResponse(self, code=None, reason=None):
+    def create_response(self, code=None, reason=None):
         response = Response(code, reason)
         response.transaction = self.transaction
         for x in ('from', 'to', 'call-id', 'cseq', 'via'):
@@ -135,4 +133,3 @@ class Request(Message):
         if self.content:
             msg += self.content
         return msg
-

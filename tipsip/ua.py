@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from twisted.internet import defer
-from twisted.python import log
-
+import asyncio
 from message import Request, Response
 from header import AddressHeader, ViaHeader
 from uri import URI
@@ -26,7 +24,7 @@ class SIPUA(object):
     def __init__(self, dialog_store, transport, transaction_layer):
         self.dialog_store = dialog_store
         self.transport = transport
-        transport.messageReceivedCallback = self.messageReceived
+        transport.message_callback = self.messageReceived
         self.transaction_layer = transaction_layer
         transaction_layer.requestReceivedCallback = self.requestReceived
         self._pending_requests = {}
@@ -40,13 +38,12 @@ class SIPUA(object):
         else:
             raise TypeError("Expected Request or Response")
 
-    @defer.inlineCallbacks
-    def requestReceived(self, request):
+    async def requestReceived(self, request):
         if not request.isValid():
             raise SIPError("400", "Bad Request")
         try:
-            yield self.handleRequest(request)
-        except SIPError, e:
+            await self.handleRequest(request)
+        except SIPError as e:
             self.sendResponse(request.createResponse(e.code, e.reason))
         except:
             self.sendResponse(request.createResponse(500, 'Server Internal Error'))
@@ -56,19 +53,19 @@ class SIPUA(object):
         branch = response.headers['via'][0].params['branch']
         is_finally = response.code >= 200
         if branch in self._pending_requests:
-            d = self._pending_requests[branch]
+            f = self._pending_requests[branch]
             wait_finally = self._pending_finally[branch]
             if is_finally or not wait_finally:
-                d.callback(response)
+                f.set_result(response)
                 del self._pending_requests[branch]
                 del self._pending_finally[branch]
 
-    @defer.inlineCallbacks
-    def handleRequest(self, request):
-        yield self._matchDialog(request)
+    async def handleRequest(self, request):
+        await self._matchDialog(request)
         method = request.method
+        print(method)
         handler = getattr(self, "handle_%s" % method, self.handle_DEFAULT)
-        yield handler(request)
+        await handler(request)
 
     def handle_DEFAULT(self, request):
         raise SIPError(405, 'Method Not Allowed')
@@ -85,18 +82,18 @@ class SIPUA(object):
             port = self.DEFAULT_UDP_PORT
         if request.dialog:
             d = self.dialog_store.incr_lcseq(request.dialog.id)
-        d = defer.Deferred()
+        f = asyncio.Future()
         branch = request.headers['via'][0].params['branch']
-        self._pending_requests[branch] = d
+        self._pending_requests[branch] = f
         self._pending_finally[branch] = wait_finally
-        self.transport.sendMessage(request, host, port)
-        return d
+        self.transport.send_message(request, host, port)
+        return f
 
     def waitResponse(self, request, wait_finally=False):
-        d = defer.Deferred()
-        self._pending_requests[branch] = d
+        f = asyncio.Future()
+        self._pending_requests[branch] = f
         self._pending_finally[branch] = wait_finally
-        return d
+        return f
 
     def sendResponse(self, response):
         via = response.headers['via'][0]
@@ -109,10 +106,9 @@ class SIPUA(object):
         if response.transaction:
             self.transaction_layer.sendResponse(response)
         else:
-            self.transport.sendMessage(response, host, port)
+            self.transport.send_message(response, host, port)
 
-    @defer.inlineCallbacks
-    def createDialog(self, request):
+    async def createDialog(self, request):
         d = Dialog()
         r = request
         d.local_tag = r.response_totag
@@ -128,17 +124,16 @@ class SIPUA(object):
         if 'record-route' in request.headers:
             rr = request.headers['record-route']
             d.route_set = [str(hdr) for hdr in rr]
-        yield self.dialog_store.put(d)
+        await self.dialog_store.put(d)
         r.dialog = d
-        defer.returnValue(d)
+        return d
 
-    @defer.inlineCallbacks
-    def removeDialog(self, dialog=None, id=None):
+    async def removeDialog(self, dialog=None, id=None):
         if not dialog and not id:
             raise TypeError("dialog or dialog.id required")
         if dialog:
             id = dialog.id
-        yield self.dialog_store.remove(id)
+        await self.dialog_store.remove(id)
 
     def _createVia(self, req):
         h = req.headers
@@ -151,20 +146,19 @@ class SIPUA(object):
             h['via'].append(via)
         via.params['branch'] = generate_branch()
 
-    @defer.inlineCallbacks
-    def _matchDialog(self, request):
+    async def _matchDialog(self, request):
         hdrs = request.headers
         if 'tag' in hdrs['t'].params:
             dialog_id = hdrs['call-id'], hdrs['to'].params['tag'], hdrs['from'].params['tag']
-            dialog = yield self.dialog_store.get(dialog_id)
+            dialog = await self.dialog_store.get(dialog_id)
             if dialog:
                 if hdrs['cseq'].number != dialog.remote_cseq + 1:
-                    log.msg("WARNING! Request CSeq (%s) mismatch. Expected %s." % \
+                    print("WARNING! Request CSeq (%s) mismatch. Expected %s." % \
                             (hdrs['cseq'].number, dialog.remote_cseq))
                     # Fallback for broken implementations
-                    yield self.removeDialog(dialog)
-                    yield self.createDialog(request)
+                    await self.removeDialog(dialog)
+                    await self.createDialog(request)
                 else:
-                    yield self.dialog_store.incr_rcseq(dialog.id)
+                    await self.dialog_store.incr_rcseq(dialog.id)
                     request.dialog = dialog
 

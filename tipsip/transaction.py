@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from twisted.internet import reactor
-from twisted.python import log
+import asyncio
+
 
 def debug(msg):
-    if __debug__:
-        log.msg(msg)
+    print(msg)
+
 
 class ServerTransaction(object):
     def __init__(self, request, transport_layer):
@@ -56,7 +56,8 @@ class TransactionLayer(object):
     T1 = 0.5
     timerJ = 64 * T1
 
-    def __init__(self, transport_layer):
+    def __init__(self, transport_layer, loop=None):
+        self.loop = loop or asyncio.get_event_loop()
         self.transport_layer = transport_layer
         self.requestReceivedCallback = lambda x: None
         self._server_transactions = {}
@@ -72,7 +73,7 @@ class TransactionLayer(object):
         transaction = response.transaction
         transaction.responseReceived(response)
         if transaction.state == "completed":
-            reactor.callLater(self.timerJ, self.discardTransaction, transaction.id)
+            self.loop.call_later(self.timerJ, self.discardTransaction, transaction.id)
 
     def discardTransaction(self, id):
         self._server_transactions.pop(id)
@@ -97,4 +98,3 @@ class TransactionLayer(object):
         self._server_transactions[transaction.id] = transaction
         debug("Transaction: %s: Created." % str(transaction.id))
         return transaction
-

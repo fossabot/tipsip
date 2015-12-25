@@ -1,2 +1,2 @@
-from memory import MemoryStorage
-from redis import RedisStorage
+from .memory import MemoryStorage
+#from redis import RedisStorage

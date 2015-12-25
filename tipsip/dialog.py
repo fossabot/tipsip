@@ -2,8 +2,6 @@
 
 import json
 
-from twisted.internet import defer
-
 from message import Request
 from header import AddressHeader, CSeqHeader
 from uri import URI
@@ -75,35 +73,30 @@ class DialogStore(object):
     def __init__(self, storage):
         self.storage = storage
 
-    @defer.inlineCallbacks
-    def get(self, id):
+    async def get(self, id):
         table = self._table(id)
         try:
-            d = yield self.storage.hgetall(table)
+            d = await self.storage.hgetall(table)
         except KeyError:
-            defer.returnValue(None)
-        defer.returnValue(Dialog.fromdict(d))
+            return
+        return Dialog.fromdict(d)
 
-    @defer.inlineCallbacks
-    def put(self, dialog):
+    async def put(self, dialog):
         table = self._table(dialog.id)
         d = dialog.todict()
-        yield self.storage.hsetn(table, d)
+        await self.storage.hsetn(table, d)
 
-    @defer.inlineCallbacks
-    def remove(self, id):
+    async def remove(self, id):
         table = self._table(id)
-        yield self.storage.hdrop(table)
+        await self.storage.hdrop(table)
 
-    @defer.inlineCallbacks
-    def incr_lcseq(self, id):
+    async def incr_lcseq(self, id):
         table = self._table(id)
-        yield self.storage.hincr(table, 'local_cseq', 1)
+        await self.storage.hincr(table, 'local_cseq', 1)
 
-    @defer.inlineCallbacks
-    def incr_rcseq(self, id):
+    async def incr_rcseq(self, id):
         table = self._table(id)
-        yield self.storage.hincr(table, 'remote_cseq', 1)
+        await self.storage.hincr(table, 'remote_cseq', 1)
 
     def _table(self, id):
         return 'sys:dialogs:' + ':'.join(id)

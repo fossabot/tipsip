@@ -334,7 +334,7 @@ class Headers(dict):
         return dict.get(self, k, d)
 
     def update(self, *arg, **kw):
-        for k, v in dict(*arg, **kw).iteritems():
+        for k, v in dict(*arg, **kw).items():
             self[k] = v
 
     def has_key(self, key):
